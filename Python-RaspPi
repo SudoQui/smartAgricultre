@@ -1,0 +1,87 @@
+import serial
+import time
+import pyrebase
+from firebase import firebase
+from datetime import datetime
+
+# Initialize Firebase
+config = {
+    'apiKey': "AIzaSyC7bMGfwo8BAsbPN6_4BzbEBfxByTCBo9U",
+    'authDomain': "moisture-sensor---wn.firebaseapp.com",
+    'databaseURL': "https://teams.microsoft.com/l/message/19:cf63b09c-dc97-44c4-a355-a120f80864d3_dfc86251-0eb4-4750-b324-8388acf98f0d@unq.gbl.spaces/1714632082193?context=%7B%22contextType%22%3A%22chat%22%7D",
+    'projectId': "moisture-sensor---wn",
+    'storageBucket': "moisture-sensor---wn.appspot.com",
+    'messagingSenderId': "57372682334"
+}
+firebase = pyrebase.initialize_app(config)
+db = firebase.database()
+
+# Function to update Firebase
+def update_firebase(value, label):
+    if value is not None:
+        data = {"label": label, "value": value}
+        results = db.child("3 Idiots").child(label).set(data)
+        time.sleep(4)
+    else:
+        print('Failed to get reading. Try again!')
+        time.sleep(4)
+
+# Function to read temperature
+def read_temperature():
+    while True:
+        # Calculate CPU temperature of Raspberry Pi in Degrees C
+        temp = int(open('/sys/class/thermal/thermal_zone0/temp').read()) / 1e3
+        # Get the current date and time
+        now = datetime.now()
+        try:
+            print("time =", now.strftime("%X,"), "temp(C) =", temp)  # %X gets the time only
+            return temp
+        except Exception as e:
+            print("Error:", e)
+            break
+
+# Function to read moisture and send data to Firebase
+def read_moisture_and_send_to_firebase(ser):
+    sample = 0
+    while True:
+        try:
+            sensor_data = ser.readline(5)
+            ser.flushInput()
+            data = float(sensor_data)
+            print("Moisture level: ", data)
+
+            if data > 10:
+                instruction = "H"
+            else:
+                instruction = "L"
+
+            ser.write(instruction.encode())
+
+            sample += 1
+            label = str(sample)
+            update_firebase(data, label)
+            time.sleep(1)
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print("Error:", e)
+
+# Main function
+def main():
+    # Initialize serial connection
+    ser = serial.Serial('/dev/ttyUSB0', 57600)
+    
+    try:
+        # Continuously read temperature and send to Firebase
+        while True:
+            temperature = read_temperature()
+            read_moisture_and_send_to_firebase(ser)
+            time.sleep(5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        ser.close()
+        print("Serial connection closed.")
+
+if __name__ == "__main__":
+    main()
